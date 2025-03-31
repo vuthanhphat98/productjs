@@ -1,97 +1,63 @@
 var express = require('express');
 var router = express.Router();
-let categorySchema = require('../schemas/category')
+let categorySchema = require('../schemas/category');
+const { check_authentication, check_authorization } = require('../utils/check_auth');
+const constants = require('../utils/constants');
 
-/* GET users listing. */
-router.get('/', async function(req, res, next) {
-  let categories = await categorySchema.find({})
-  res.status(200).send({
-    success:true,
-    data:categories
-  });
-});
-router.get('/:id', async function(req, res, next) {
+// GET: Không yêu cầu đăng nhập
+router.get('/', async function (req, res, next) {
   try {
-    let id = req.params.id;
-    let category = await categorySchema.findById(id)
-    res.status(200).send({
-      success:true,
-      data:category
-    });
+    let categories = await categorySchema.find({ isDeleted: false });
+    res.status(200).send({ success: true, data: categories });
   } catch (error) {
-    res.status(404).send({
-      success:false,
-      message:error.message
-    });
+    next(error);
   }
 });
-router.post('/', async function(req, res, next) {
+
+router.get('/:id', async function (req, res, next) {
   try {
-    let body = req.body;
-    let newCategory = new categorySchema({
-      name:body.name
-    });
-    await newCategory.save()
-    res.status(200).send({
-      success:true,
-      data:newCategory
-    });
+    let category = await categorySchema.findOne({ _id: req.params.id, isDeleted: false });
+    if (!category) throw new Error('Category not found');
+    res.status(200).send({ success: true, data: category });
   } catch (error) {
-    res.status(404).send({
-      success:false,
-      message:error.message
-    });
+    next(error);
   }
 });
-router.put('/:id', async function(req, res, next) {
+
+// POST: Yêu cầu quyền mod hoặc admin
+router.post('/', check_authentication, check_authorization(constants.MOD_PERMISSION), async function (req, res, next) {
   try {
-    let id = req.params.id;
-    let category = await categorySchema.findById(id);
-    if(category){
-      let body = req.body;
-      if(body.name){
-        category.name = body.name;
-      }
-      await category.save()
-      res.status(200).send({
-        success:true,
-        data:category
-      });
-    }else{
-      res.status(404).send({
-        success:false,
-        message:"ID khomng ton tai"
-      });
-    }
+    let newCategory = new categorySchema({ name: req.body.name });
+    await newCategory.save();
+    res.status(200).send({ success: true, data: newCategory });
   } catch (error) {
-    res.status(404).send({
-      success:false,
-      message:error.message
-    });
+    next(error);
   }
 });
-router.delete('/:id', async function(req, res, next) {
+
+// PUT: Yêu cầu quyền mod hoặc admin
+router.put('/:id', check_authentication, check_authorization(constants.MOD_PERMISSION), async function (req, res, next) {
   try {
-    let id = req.params.id;
-    let category = await categorySchema.findById(id);
-    if(category){
-      category.isDeleted = true
-      await category.save()
-      res.status(200).send({
-        success:true,
-        data:category
-      });
-    }else{
-      res.status(404).send({
-        success:false,
-        message:"ID khomng ton tai"
-      });
-    }
+    let category = await categorySchema.findOne({ _id: req.params.id, isDeleted: false });
+    if (!category) throw new Error('Category not found');
+    if (req.body.name) category.name = req.body.name;
+    await category.save();
+    res.status(200).send({ success: true, data: category });
   } catch (error) {
-    res.status(404).send({
-      success:false,
-      message:error.message
-    });
+    next(error);
+  }
+});
+
+// DELETE: Yêu cầu quyền admin
+router.delete('/:id', check_authentication, check_authorization(constants.ADMIN_PERMISSION), async function (req, res, next) {
+  try {
+    let category = await categorySchema.findOne({ _id: req.params.id, isDeleted: false });
+    if (!category) throw new Error('Category not found');
+    category.isDeleted = true;
+    await category.save();
+    res.status(200).send({ success: true, data: category });
+  } catch (error) {
+    next(error);
   }
 });
 
